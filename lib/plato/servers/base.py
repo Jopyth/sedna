@@ -75,6 +75,7 @@ class Server:
         self.updates = []
         self.client_payload = {}
         self.client_chunks = {}
+        self.paused = False
 
     def run(self, client=None, edge_server=None, edge_client=None):
         """Start a run loop for the server. """
@@ -149,6 +150,9 @@ class Server:
         if self.current_round == 0 and len(
                 self.clients) >= self.clients_per_round:
             logging.info("[Server #%d] Starting training.", os.getpid())
+            await self.select_clients()
+        elif self.paused and len(self.clients) >= self.clients_per_round:
+            logging.info("[Server #%d] Resuming training after pause.", os.getpid())
             await self.select_clients()
 
     @staticmethod
@@ -361,7 +365,13 @@ class Server:
                 if client_id in self.selected_clients:
                     self.selected_clients.remove(client_id)
 
-                    if len(self.updates) > 0 and len(self.updates) >= len(
+                    if len(self.updates) == 0 and len(self.selected_clients) == 0:
+                        logging.info(
+                            "[Server #%d] No updates received, no clients connected. Pausing training.",
+                            os.getpid())
+                        self.current_round -= 1
+                        self.paused = True
+                    elif len(self.updates) > 0 and len(self.updates) >= len(
                             self.selected_clients):
                         logging.info(
                             "[Server #%d] All %d client reports received. Processing.",
