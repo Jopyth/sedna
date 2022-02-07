@@ -152,6 +152,7 @@ class Server:
             logging.info("[Server #%d] Starting training.", os.getpid())
             await self.select_clients()
         elif self.paused and len(self.clients) >= self.clients_per_round:
+            self.paused = False
             logging.info("[Server #%d] Resuming training after pause.", os.getpid())
             await self.select_clients()
 
@@ -359,8 +360,8 @@ class Server:
                 del self.clients[client_id]
 
                 logging.info(
-                    "[Server #%d] Client #%s disconnected (%d remaining) and removed from this server.",
-                    os.getpid(), client_id, len(self.selected_clients))
+                    "[Server #%d] Client #%s disconnected and removed from this server.",
+                    os.getpid(), client_id)
 
                 if client_id in self.selected_clients:
                     self.selected_clients.remove(client_id)
