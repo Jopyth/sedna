@@ -359,8 +359,8 @@ class Server:
                 del self.clients[client_id]
 
                 logging.info(
-                    "[Server #%d] Client #%s disconnected and removed from this server.",
-                    os.getpid(), client_id)
+                    "[Server #%d] Client #%s disconnected (%d remaining) and removed from this server.",
+                    os.getpid(), client_id, len(self.selected_clients))
 
                 if client_id in self.selected_clients:
                     self.selected_clients.remove(client_id)
@@ -379,6 +379,10 @@ class Server:
                         await self.process_reports()
                         await self.wrap_up()
                         await self.select_clients()
+                    else:
+                        logging.info(
+                            "[Server #%d] %d updates received and %d clients of selected clients still connected!",
+                            os.getpid(), len(self.updates), len(self.selected_clients))
 
     async def wrap_up(self):
         """Wrapping up when each round of training is done."""
