@@ -33,7 +33,7 @@ import logging
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 # logging.basicConfig(level=logging.INFO, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
-logging.basicConfig(level=logging.DEBUG, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
+logging.basicConfig(level=logging.INFO, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
 
 ## 3. 编写训练模型，导入训练数据，启动本地训练。
 
@@ -238,6 +238,7 @@ class EdgeAiTrainer(BasicTrainer):
         super(EdgeAiTrainer, self).__init__(model)
         self.current_round = -1
         self.current_learning_rate = 0
+        self.first_round = True
 
     def get_optimizer(self, model):
         "customize SGD with our own computed learning rate. other optimizers can be retrieved from the default method."
@@ -253,8 +254,7 @@ class EdgeAiTrainer(BasicTrainer):
             )
         return optimizers.get_optimizer(self.model)
 
-    def train(self, trainset, sampler, cut_layer=None) -> float:
-        assert self.current_round >= 0, "the current round of the trainer was not correctly set by the client"
+    def set_learning_rate(self):
         initial_learning_rate = Config().trainer.learning_rate
         # TODO: calculate the current learning rate, and store it in self.current_learning_rate
         #       the rate should be:
@@ -269,15 +269,21 @@ class EdgeAiTrainer(BasicTrainer):
         else:
             self.current_learning_rate = initial_learning_rate / 100
         ### END SOLUTION
+
+    def train(self, trainset, sampler, cut_layer=None) -> float:
+        if not self.first_round:
+            raise RuntimeError("Stopping training after early after one epoch.")
+        assert self.current_round >= 0, "the current round of the trainer was not correctly set by the client"
+        self.set_learning_rate()
         logging.info("[Edge AI Trainer] Start training.")
         training_time = super().train(trainset, sampler, cut_layer=cut_layer)
         logging.info("[Edge AI Trainer] Finished training, saving the model.")
         self.save_model()
+        self.first_round = False
         return training_time
 
 
 trainer_registry.registered_trainers["edge_ai_trainer"] = EdgeAiTrainer
-
 ####################################################################################################################
 from plato.clients import registry as client_registry
 from plato.clients.simple import Client as SimpleClient
@@ -286,37 +292,33 @@ from plato.clients.simple import Client as SimpleClient
 class EdgeAiClient(SimpleClient):
     def load_payload(self, server_payload) -> None:
         """Load the server model onto this client and store current rounds in the trainer."""
-        try:
-            # Task 4a)
-            # TODO: load the weights into the algorithm and save the current rounds for our trainer
-            # HINT: payload is a dictionary with two key value pairs:
-            #         "weights"       - the weights to be loaded into `self.algorithm`
-            #         "current_round" - the current round (on the server) which needs to be saved in `self.trainer`
-            ### BEGIN SOLUTION
-            self.algorithm.load_weights(server_payload["weights"])
-            self.trainer.current_round = server_payload["current_round"]
-            ### END SOLUTION
-        except Exception as e:
-            logging.error(e)
-            self.sio.disconnect()
+        # Task 4a)
+        # TODO: load the weights into the algorithm and save the current rounds for our trainer
+        # HINT: payload is a dictionary with two key value pairs:
+        #         "weights"       - the weights to be loaded into `self.algorithm`
+        #         "current_round" - the current round (on the server) which needs to be saved in `self.trainer`
+        ### BEGIN SOLUTION
+        self.algorithm.load_weights(server_payload["weights"])
+        self.trainer.current_round = server_payload["current_round"]
+        ### END SOLUTION
+
+    def extra_test(self):
+        accuracy = 0
+        # Task 4b)
+        # TODO: check how the SimpleClient tests the model on the test data and paste the code to do so here
+        # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
+        ### BEGIN SOLUTION
+        accuracy = self.trainer.test(self.testset)
+        ### END SOLUTION
+        return accuracy
 
     async def train(self):
-        try:
-            logging.info("[Client #%d] Do a validation pass before training.", self.client_id)
-            # Task 4b)
-            # TODO: check how the SimpleClient does a testing pass, and paste the code to do so here
-            # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
-            ### BEGIN SOLUTION
-            accuracy = self.trainer.test(self.testset)
-            if accuracy == 0:
-                # The testing process failed, disconnect from the server
-                await self.sio.disconnect()
-            ### END SOLUTION
-            logging.info("[Client #{:d}] Test accuracy: {:.2f}%".format(self.client_id, 100 * accuracy))
-        except Exception as e:
-            logging.error(e)
+        logging.info("[Client #%d] Do a validation pass before training.", self.client_id)
+        accuracy = self.extra_test()
+        if accuracy == 0:
+            # The testing process failed, disconnect from the server
             await self.sio.disconnect()
-            return
+        logging.info("[Client #{:d}] Test accuracy: {:.2f}%".format(self.client_id, 100 * accuracy))
         return await super().train()
 
 
