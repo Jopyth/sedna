@@ -241,6 +241,7 @@ class EdgeAiTrainer(BasicTrainer):
 
     def get_optimizer(self, model):
         "customize SGD with our own computed learning rate. other optimizers can be retrieved from the default method."
+        logging.info(f"[Edge AI Trainer] Using lr={self.current_learning_rate:.5f} (in round {self.current_round}).")
         assert self.current_learning_rate > 0, "the learning rate was not set correctly, it should be larger than 0"
         assert self.current_learning_rate <= Config().trainer.learning_rate, "the learning rate should never be increased"
         if Config().trainer.optimizer == 'SGD':
@@ -284,32 +285,39 @@ from plato.clients.simple import Client as SimpleClient
 
 class EdgeAiClient(SimpleClient):
     def load_payload(self, server_payload) -> None:
-        """Loading the server model onto this client and store current rounds in the trainer."""
-        logging.debug("[Client #{:d}] Loading payload: {}".format(self.client_id, server_payload))
-        # Task 4a)
-        # TODO: load the weights into the algorithm and save the current rounds for our trainer
-        # HINT: payload is a dictionary with two key value pairs:
-        #         "weights" are the weights to be loaded into our algorithm (the algorithm is stored in `self.algorithm`)
-        #         "current_round" is the current round (on the server) which needs to be saved in our trainer (the trainer is stored in `self.trainer`)
-        ### BEGIN SOLUTION
-        self.algorithm.load_weights(server_payload["weights"])
-        self.trainer.current_round = server_payload["current_round"]
-        ### END SOLUTION
+        """Load the server model onto this client and store current rounds in the trainer."""
+        try:
+            # Task 4a)
+            # TODO: load the weights into the algorithm and save the current rounds for our trainer
+            # HINT: payload is a dictionary with two key value pairs:
+            #         "weights"       - the weights to be loaded into `self.algorithm`
+            #         "current_round" - the current round (on the server) which needs to be saved in `self.trainer`
+            ### BEGIN SOLUTION
+            self.algorithm.load_weights(server_payload["weights"])
+            self.trainer.current_round = server_payload["current_round"]
+            ### END SOLUTION
+        except Exception as e:
+            logging.error(e)
+            self.sio.disconnect()
 
     async def train(self):
-        logging.info("[Client #%d] Do a validation pass before training.", self.client_id)
-        # Task 4b)
-        # TODO: check how the SimpleClient does a testing pass, and paste the code to do so here
-        # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
-        ### BEGIN SOLUTION
-        accuracy = self.trainer.test(self.testset)
-        if accuracy == 0:
-            # The testing process failed, disconnect from the server
+        try:
+            logging.info("[Client #%d] Do a validation pass before training.", self.client_id)
+            # Task 4b)
+            # TODO: check how the SimpleClient does a testing pass, and paste the code to do so here
+            # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
+            ### BEGIN SOLUTION
+            accuracy = self.trainer.test(self.testset)
+            if accuracy == 0:
+                # The testing process failed, disconnect from the server
+                await self.sio.disconnect()
+            ### END SOLUTION
+            logging.info("[Client #{:d}] Test accuracy: {:.2f}%".format(self.client_id, 100 * accuracy))
+        except Exception as e:
+            logging.error(e)
             await self.sio.disconnect()
-        ### END SOLUTION
-        logging.info("[Client #{:d}] Test accuracy: {:.2f}%".format(
-            self.client_id, 100 * accuracy))
-        await super().train()
+            return
+        return await super().train()
 
 
 client_registry.registered_clients["edge_ai_client"] = EdgeAiClient
