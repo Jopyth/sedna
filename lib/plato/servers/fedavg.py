@@ -205,6 +205,4 @@ class Server(base.Server):
 
     def customize_server_payload(self, payload):
         """ Customize the server payload before sending to the client. """
-        customized_payload = {"weights": payload, "current_round": self.current_round}
-        logging.info("[Server #{:d}] Sending payload: {}".format(os.getpid(), customized_payload))
-        return customized_payload
+        return {"weights": payload, "current_round": self.current_round}
