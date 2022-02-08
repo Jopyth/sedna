@@ -34,9 +34,9 @@ class Estimator:
         self.saved = None
         self.hyperparameters = {
             "type": "basic",
-            "rounds": 10,
-            "target_accuracy": 0.5,
-            "epochs": 10,
+            "rounds": 50,
+            "target_accuracy": 0.6,
+            "epochs": 5,
             "batch_size": 128,
             "optimizer": "SGD",
             "learning_rate": 0.1,
