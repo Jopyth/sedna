@@ -15,6 +15,7 @@
 # Contents are in utility script on Kaggle:
 import os
 # os.environ['AGG_IP']="x.x.x.x" # aggregation server ip
+
 os.environ['AGG_PORT'] = "30363"  # aggregation server websocket port
 os.environ['TRANSMITTER'] = "ws"
 
@@ -31,7 +32,8 @@ os.environ['DATASET_NAME'] = "cifar100"
 import logging
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
-logging.basicConfig(level=logging.INFO, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
+# logging.basicConfig(level=logging.INFO, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(filename)s:%(lineno)s %(levelname)s:%(message)s')
 
 ## 3. 编写训练模型，导入训练数据，启动本地训练。
 
@@ -158,7 +160,29 @@ print("Number of test samples:    ", len(cifar_test_set))
 
 assert len(cifar_train_set) == 25000, "We should use 25000 training samples (half of all data)."
 assert len(cifar_test_set) == 10000, "We should use all 10000 test samples."
-
+####################################################################################################################
+# from plato.trainers import registry as trainer_registry
+# from plato.trainers.basic import Trainer as BasicTrainer
+#
+# from plato.clients import registry as client_registry
+# from plato.clients.simple import Client as SimpleClient
+#
+#
+# class EdgeAiTrainer(BasicTrainer):
+#     def train(self, trainset, sampler, cut_layer=None) -> float:
+#         logging.info("Edge AI trainer started training.")
+#         training_time = super().train(trainset, sampler, cut_layer=cut_layer)
+#         logging.info("Edge AI trainer finished training, saving the model.")
+#         self.save_model()
+#         return training_time
+#
+#
+# class EdgeAiClient(SimpleClient):
+#     pass
+#
+#
+# client_registry.registered_clients["edge_ai_client"] = EdgeAiClient
+# trainer_registry.registered_trainers["edge_ai_trainer"] = EdgeAiTrainer
 ####################################################################################################################
 import cifar100_resnets as models
 
@@ -166,8 +190,8 @@ import cifar100_resnets as models
 class CustomDataset:
     def __init__(self, trainset, testset) -> None:
         self.customized = True
-        self.trainset = trainset
-        self.testset = testset
+        self.trainset = cifar_train_set
+        self.testset = cifar_test_set
 
 
 class Estimator:
@@ -175,16 +199,20 @@ class Estimator:
         self.model = self.build()
         self.pretrained = None
         self.saved = None
+        # select our custom client
         self.use_client = "edge_ai_client"
         self.hyperparameters = {
+            # select our custom trainer
             "type": "edge_ai_trainer",
-            "rounds": 10,
-            "target_accuracy": 0.5,
-            "epochs": 2,
+            # train for 50 rounds, each round consists of multiple epochs, average the model and accuracy between all clients after each round
+            "rounds": 50,
+            # stop training early if we achieve an average accuracy of at least 60 % between all clients
+            "target_accuracy": 0.6,
+            # train for 5 epochs each round
+            "epochs": 5,
             "batch_size": 128,
             "optimizer": "SGD",
             "learning_rate": 0.1,
-            "lr_schedule": "StepLR",
             "model_name": "cifar100_resnet",
             "momentum": 0.9,
             "weight_decay": 1e-4
@@ -199,32 +227,98 @@ class Estimator:
 from plato.trainers import registry as trainer_registry
 from plato.trainers.basic import Trainer as BasicTrainer
 
-from plato.clients import registry as client_registry
-from plato.clients.simple import Client as SimpleClient
+from plato.config import Config
+from plato.utils import optimizers
+
+from torch import optim
 
 
 class EdgeAiTrainer(BasicTrainer):
+    def __init__(self, model=None):
+        super(EdgeAiTrainer, self).__init__(model)
+        self.current_round = -1
+        self.current_learning_rate = 0
+
+    def get_optimizer(self, model):
+        "customize SGD with our own computed learning rate. other optimizers can be retrieved from the default method."
+        assert self.current_learning_rate > 0, "the learning rate was not set correctly, it should be larger than 0"
+        assert self.current_learning_rate <= Config().trainer.learning_rate, "the learning rate should never be increased"
+        if Config().trainer.optimizer == 'SGD':
+            return optim.SGD(
+                model.parameters(),
+                lr=self.current_learning_rate,
+                momentum=Config().trainer.momentum,
+                weight_decay=Config().trainer.weight_decay
+            )
+        return optimizers.get_optimizer(self.model)
+
     def train(self, trainset, sampler, cut_layer=None) -> float:
-        logging.info("Edge AI trainer started training.")
+        assert self.current_round >= 0, "the current round of the trainer was not correctly set by the client"
+        initial_learning_rate = Config().trainer.learning_rate
+        # TODO: calculate the current learning rate, and store it in self.current_learning_rate
+        #       the rate should be:
+        #           1 * initial_learning_rate     for rounds 1  through 20
+        #           1/10 * initial_learning_rate  for rounds 21 through 40
+        #           1/100 * initial_learning_rate for rounds 41 through 50
+        ### BEGIN SOLUTION
+        if self.current_round <= 20:
+            self.current_learning_rate = initial_learning_rate
+        elif self.current_round <= 40:
+            self.current_learning_rate = initial_learning_rate / 10
+        else:
+            self.current_learning_rate = initial_learning_rate / 100
+        ### END SOLUTION
+        logging.info("[Edge AI Trainer] Start training.")
         training_time = super().train(trainset, sampler, cut_layer=cut_layer)
-        logging.info("Edge AI trainer finished training, saving the model.")
+        logging.info("[Edge AI Trainer] Finished training, saving the model.")
         self.save_model()
         return training_time
 
 
+trainer_registry.registered_trainers["edge_ai_trainer"] = EdgeAiTrainer
+
+####################################################################################################################
+from plato.clients import registry as client_registry
+from plato.clients.simple import Client as SimpleClient
+
+
 class EdgeAiClient(SimpleClient):
-    pass
+    def load_payload(self, server_payload) -> None:
+        """Loading the server model onto this client and store current rounds in the trainer."""
+        logging.debug("[Client #{:d}] Loading payload: {}".format(self.client_id, server_payload))
+        # Task 4a)
+        # TODO: load the weights into the algorithm and save the current rounds for our trainer
+        # HINT: payload is a dictionary with two key value pairs:
+        #         "weights" are the weights to be loaded into our algorithm (the algorithm is stored in `self.algorithm`)
+        #         "current_round" is the current round (on the server) which needs to be saved in our trainer (the trainer is stored in `self.trainer`)
+        ### BEGIN SOLUTION
+        self.algorithm.load_weights(server_payload["weights"])
+        self.trainer.current_round = server_payload["current_round"]
+        ### END SOLUTION
+
+    async def train(self):
+        logging.info("[Client #%d] Do a validation pass before training.", self.client_id)
+        # Task 4b)
+        # TODO: check how the SimpleClient does a testing pass, and paste the code to do so here
+        # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
+        ### BEGIN SOLUTION
+        accuracy = self.trainer.test(self.testset)
+        if accuracy == 0:
+            # The testing process failed, disconnect from the server
+            await self.sio.disconnect()
+        ### END SOLUTION
+        logging.info("[Client #{:d}] Test accuracy: {:.2f}%".format(
+            self.client_id, 100 * accuracy))
+        await super().train()
 
 
 client_registry.registered_clients["edge_ai_client"] = EdgeAiClient
-trainer_registry.registered_trainers["edge_ai_trainer"] = EdgeAiTrainer
-
 ####################################################################################################################
 
 from sedna.algorithms.aggregation import FedAvgV2
 from sedna.core.federated_learning import FederatedLearningV2
 
-
+# create an instance of our dataset
 our_dataset = CustomDataset(trainset=cifar_train_set, testset=cifar_test_set)
 # create an instance of our estimator
 estimator = Estimator()
@@ -232,7 +326,6 @@ estimator = Estimator()
 fedavg = FedAvgV2()
 # get configured model transmitter
 transmitter = FederatedLearningV2.get_transmitter_from_config()
-
 
 fl = FederatedLearningV2(
     data=our_dataset,

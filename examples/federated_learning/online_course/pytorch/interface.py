@@ -21,7 +21,6 @@ import cifar100_resnets as models
 
 simple_chooser = SimpleClientChoose(per_round=int(Context.get_parameters('NUM_OF_SELECTED_CLIENTS', 2)))
 
-# It has been determined that mistnet is required here.
 fedavg = FedAvgV2()
 
 # The function `get_transmitter_from_config()` returns an object instance.

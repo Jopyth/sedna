@@ -126,7 +126,7 @@ class Server:
             self.s3_client = s3.S3()
         except:
             self.s3_client = None
-            
+
         app = web.Application()
         self.sio.attach(app)
         web.run_app(app, host=Config().server.address, port=port)
@@ -225,7 +225,13 @@ class Server:
 
         self.selected_clients = self.choose_clients()
 
-        if len(self.selected_clients) > 0:
+        if len(self.selected_clients) == 0:
+            logging.info(
+                "[Server #%d] Not enough clients could be chosen.",
+                os.getpid())
+            self.current_round -= 1
+            self.paused = True
+        else:
             for i, selected_client_id in enumerate(self.selected_clients):
                 if hasattr(Config().clients, 'simulation') and Config(
                 ).clients.simulation and not Config().is_central_server:

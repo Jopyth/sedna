@@ -17,6 +17,9 @@ from plato.utils import csv_processor
 from plato.servers import base
 
 
+MAX_CLIENTS = 10
+
+
 class Server(base.Server):
     """Federated learning server using federated averaging."""
     def __init__(self, model=None, algorithm=None, trainer=None):
@@ -38,8 +41,8 @@ class Server(base.Server):
         self.clients_per_round = Config().clients.per_round
 
         logging.info(
-            "[Server #%d] Started training on %s clients with %s per round.",
-            os.getpid(), self.total_clients, self.clients_per_round)
+            "[Server #%d] Started training on %s clients with %s per round (max clients %d).",
+            os.getpid(), self.total_clients, self.clients_per_round, MAX_CLIENTS)
 
         # starting time of a global training round
         self.round_start_time = 0
@@ -94,14 +97,12 @@ class Server(base.Server):
     def choose_clients(self):
         """Choose a subset of the clients to participate in each round."""
         # Select clients randomly
-        # assert self.clients_per_round <= len(self.clients_pool)
-        message_logged = False
-        while self.clients_per_round > len(self.clients_pool):
-            if not message_logged:
-                logging.info("waiting (indefinitely) for missing clients")
-                message_logged = True
-            time.sleep(5)
-        return random.sample(self.clients_pool, self.clients_per_round)
+        if len(self.clients_pool) < self.clients_per_round:
+            return []
+        num_clients = self.clients_per_round
+        if len(self.clients_pool) > num_clients:
+            num_clients = min(len(self.clients_pool), MAX_CLIENTS)
+        return random.sample(self.clients_pool, num_clients)
 
     def extract_client_updates(self, updates):
         """Extract the model weight updates from client updates."""
@@ -204,4 +205,6 @@ class Server(base.Server):
 
     def customize_server_payload(self, payload):
         """ Customize the server payload before sending to the client. """
-        return payload
+        customized_payload = {"weights": payload, "current_round": self.current_round}
+        logging.info("[Server #{:d}] Sending payload: {}".format(os.getpid(), customized_payload))
+        return customized_payload
