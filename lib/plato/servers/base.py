@@ -382,8 +382,7 @@ class Server:
                         if len(self.clients) >= self.clients_per_round:
                             await self.select_clients()
                         else:
-                            logging.info("[Server #%d] Pausing training.",
-                                         os.getpid(), len(self.clients))
+                            logging.info("[Server #%d] Pausing training.", os.getpid())
                             self.paused = True
                     elif len(self.updates) > 0 and len(self.updates) >= len(
                             self.selected_clients):
