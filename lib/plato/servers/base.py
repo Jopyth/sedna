@@ -377,8 +377,8 @@ class Server:
                         os.getpid(), len(self.updates), len(self.selected_clients), len(self.clients))
 
                     if len(self.updates) == 0 and len(self.selected_clients) == 0:
+                        logging.info("[Server #%d] Resetting to start of round %d.", os.getpid(), self.current_round)
                         self.current_round -= 1
-                        logging.info("[Server #%d] Resetting to round %d.", os.getpid(), self.current_round)
                         if len(self.clients) >= self.clients_per_round:
                             await self.select_clients()
                         else:
