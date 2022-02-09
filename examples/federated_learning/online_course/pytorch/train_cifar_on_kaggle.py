@@ -306,7 +306,7 @@ class EdgeAiClient(SimpleClient):
         accuracy = 0
         # Task 4b)
         # TODO: check how the SimpleClient tests the model on the test data and paste the code to do so here
-        # HINT: the returned accuracy should be stored in the variable `accuracy` so it can be printed below
+        # HINT: one line is enough and the returned accuracy should be stored in the variable `accuracy` so it can be returned
         ### BEGIN SOLUTION
         accuracy = self.trainer.test(self.testset)
         ### END SOLUTION
