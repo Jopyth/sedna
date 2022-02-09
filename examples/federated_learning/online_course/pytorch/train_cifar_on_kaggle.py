@@ -272,7 +272,7 @@ class EdgeAiTrainer(BasicTrainer):
 
     def train(self, trainset, sampler, cut_layer=None) -> float:
         if not self.first_round:
-            raise RuntimeError("Stopping training after early after one epoch.")
+            raise ValueError("Stopping training after early after one epoch.")
         assert self.current_round >= 0, "the current round of the trainer was not correctly set by the client"
         self.set_learning_rate()
         logging.info("[Edge AI Trainer] Start training.")
