@@ -372,12 +372,19 @@ class Server:
                 if client_id in self.selected_clients:
                     self.selected_clients.remove(client_id)
 
+                    logging.info(
+                        "[Server #%d] %d updates received, %d/%d connected clients are currently selected.",
+                        os.getpid(), len(self.updates), len(self.selected_clients), len(self.clients))
+
                     if len(self.updates) == 0 and len(self.selected_clients) == 0:
-                        logging.info(
-                            "[Server #%d] No updates received, no clients connected. Pausing training.",
-                            os.getpid())
                         self.current_round -= 1
-                        self.paused = True
+                        logging.info("[Server #%d] Resetting to round %d.", os.getpid(), self.current_round)
+                        if len(self.clients) >= self.clients_per_round:
+                            await self.select_clients()
+                        else:
+                            logging.info("[Server #%d] Pausing training.",
+                                         os.getpid(), len(self.clients))
+                            self.paused = True
                     elif len(self.updates) > 0 and len(self.updates) >= len(
                             self.selected_clients):
                         logging.info(
@@ -386,10 +393,6 @@ class Server:
                         await self.process_reports()
                         await self.wrap_up()
                         await self.select_clients()
-                    else:
-                        logging.info(
-                            "[Server #%d] %d updates received and %d clients of selected clients still connected!",
-                            os.getpid(), len(self.updates), len(self.selected_clients))
 
     async def wrap_up(self):
         """Wrapping up when each round of training is done."""
