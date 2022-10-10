@@ -58,11 +58,14 @@ class BigModelService(JobBase):
         Start inference rest server
         """
 
+        self.log.info(f"Estimator: {self.estimator}")
+        self.log.info(f"Model path: {self.model_path}")
         if callable(self.estimator):
             self.estimator = self.estimator()
         if not validate_model_urls(self.model_path):
             raise FileExistsError(f"{self.model_path} miss")
         else:
+            self.log.info("Loading model.")
             self.estimator.load(self.model_path)
         app_server = InferenceServer(model=self, servername=self.job_name,
                                      host=self.local_ip, http_port=self.port)

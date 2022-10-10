@@ -113,12 +113,12 @@ class BackendBase:
             model_path = FileOps.join_path(self.model_save_path, mname)
         else:
             model_path = self.model_save_path
-        if model_url:
-            model_path = FileOps.download(model_url, model_path)
-        self.has_load = True
-        if not (hasattr(self.estimator, "load")
-                and os.path.exists(model_path)):
-            return
+        # if model_url:
+        #     model_path = FileOps.download(model_url, model_path)
+        # self.has_load = True
+        # if not (hasattr(self.estimator, "load")
+        #         and os.path.exists(model_path)):
+        #     return
         return self.estimator.load(model_url=model_path)
 
     def set_weights(self, weights):

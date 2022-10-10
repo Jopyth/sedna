@@ -23,7 +23,9 @@ import torch.nn.functional as F
 import cifar100_resnets as models
 from cifar100_partition_net import resnet110_p1, resnet110_p2, resnet110_p1_head
 
-LOG = logging.getLogger(__name__)
+from sedna.common.log import LOGGER as LOG
+# LOG = logging.getLogger(__name__)
+
 os.environ['BACKEND_TYPE'] = 'TORCH'
 
 
@@ -64,6 +66,7 @@ def accuracy(predictions: torch.Tensor, labels: torch.Tensor, reduce_mean: bool 
 class Estimator:
 
     def __init__(self, **kwargs):
+        LOG.info(f"Initializing estimator with kwargs: {kwargs}")
         self.model = None
         self.model2 = None
         self.is_partitioned = False
@@ -90,7 +93,8 @@ class Estimator:
             self.model_path = kwargs["model_path"]
 
     def load(self, model_url=""):
-        if self.model_path: model_url = self.model_path
+        if self.model_path:
+            model_url = self.model_path
         url_list = model_url.split(";", 1)
         checkpoint = torch.load(url_list[0], map_location=get_device())
         LOG.info(f"Load pytorch checkpoint {url_list[0]} finsihed!")
@@ -103,6 +107,7 @@ class Estimator:
             self.model2.load_state_dict(checkpoint['model_state_dict'])
             LOG.info("Load pytorch state dict finished!")
 
+        LOG.info("Server model on device: %s", get_device())
         self.model = self.model.to(get_device())
         self.model.eval()
         if self.model2 is not None:

@@ -16,6 +16,9 @@ from sedna.core.joint_inference import BigModelService
 
 from interface import Estimator
 
+# import pydevd_pycharm
+# pydevd_pycharm.settrace('localhost', port=11004, stdoutToServer=True, stderrToServer=True)
+
 
 def run():
     inference_instance = BigModelService(estimator=Estimator(is_cloud_node=True))
