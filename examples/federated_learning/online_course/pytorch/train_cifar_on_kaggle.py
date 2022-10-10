@@ -16,7 +16,7 @@
 import os
 # os.environ['AGG_IP']="x.x.x.x" # aggregation server ip
 
-os.environ['AGG_PORT'] = "30363"  # aggregation server websocket port
+os.environ['AGG_PORT'] = "7363"  # aggregation server websocket port
 os.environ['TRANSMITTER'] = "ws"
 
 # worker parameters.
